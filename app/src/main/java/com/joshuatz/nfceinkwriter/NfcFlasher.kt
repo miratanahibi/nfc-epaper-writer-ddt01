@@ -147,7 +147,7 @@ class NfcFlasher : AppCompatActivity() {
         // Init NFC adapter
         mNfcAdapter = NfcAdapter.getDefaultAdapter(this)
         if (mNfcAdapter == null) {
-            Toast.makeText(this, "NFC is not available on this device.", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "このスマホでは動作しません", Toast.LENGTH_LONG).show()
         }
 
         // Start NFC check loop in case adapter dies
@@ -267,13 +267,13 @@ class NfcFlasher : AppCompatActivity() {
                     if (!result.success) {
                         toast = Toast.makeText(
                             applicationContext,
-                            "FAILED to Flash :( ${result.errMessage}",
+                            "書き込み失敗しました..",
                             Toast.LENGTH_LONG
                         )
                     } else {
                         toast = Toast.makeText(
                             applicationContext,
-                            "Success! Flashed display!",
+                            "書き込みましたー",
                             Toast.LENGTH_LONG
                         )
                     }

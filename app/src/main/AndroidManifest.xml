@@ -2,7 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.joshuatz.nfceinkwriter">
 
-    <uses-sdk android:minSdkVersion="30" />
+    <!--<uses-sdk android:minSdkVersion="30" />-->
 
     <uses-permission android:name="android.permission.NFC" /> <!-- This will prevent app from **showing** in app-store for phones without NFC -->
     <uses-feature

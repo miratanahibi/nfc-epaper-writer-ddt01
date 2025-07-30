@@ -1,2 +1,2 @@
 include ':app'
-rootProject.name = "NFC E-Ink Writer"
+rootProject.name = "doldoltalk"

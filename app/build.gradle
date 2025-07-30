@@ -10,18 +10,31 @@ android {
 
     defaultConfig {
         applicationId "com.joshuatz.nfceinkwriter"
-        minSdkVersion 16
+        minSdkVersion 19
         targetSdkVersion 30
         versionCode 1
         versionName "1.0"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
-
+    signingConfigs {
+        release {
+            // 環境変数や gradle.properties から読み込むことを強く推奨
+            storeFile file("dolldolltalk.jks") // 例: "my-release-key.jks" キーストアファイルへのパス
+            storePassword "ii0vetqe"    // キーストアのパスワード
+            keyAlias "key0"                 // キーエイリアス
+            keyPassword "masd21ed"           // キーのパスワード
+        }
+    }
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            // signingConfig signingConfigs.debug
+            signingConfig signingConfigs.release
+        }
+        debug {
+            // debugビルドは通常、デフォルトのデバッグ署名が使われる
         }
     }
     compileOptions {

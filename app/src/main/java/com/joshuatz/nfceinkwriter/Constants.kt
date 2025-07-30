@@ -17,7 +17,7 @@ val ScreenSizes = arrayOf(
     "2.9\" v.B",
 )
 
-val DefaultScreenSize = ScreenSizes[1]
+val DefaultScreenSize = ScreenSizes[5]
 
 val ScreenSizesInPixels = mapOf(
     // The true resolution for 2.13" is 250x122, but there is a (likely) typo in the SDK

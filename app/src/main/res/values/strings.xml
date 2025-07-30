@@ -1,13 +1,13 @@
 <resources>
-    <string name="app_name">NFC E-Ink Writer</string>
-    <string name="pick_image_file_cta_text">Load Image</string>
-    <string name="cta_new_text_invite">New - Text</string>
+    <string name="app_name">どるどるトーク</string>
+    <string name="pick_image_file_cta_text">画像や写真はここから</string>
+    <string name="cta_new_text_invite">文章はここから</string>
     <string name="cta_new_graphic_invite">New - Graphic</string>
     <string name="currDisplaySizeDefaultText">Select a Display Size</string>
-    <string name="flashButtonText">Flash / Program</string>
-    <string name="image_preview_content_description">Image to Flash Preview</string>
-    <string name="hold_phone_to_flash_text">Hold Phone Against Eink Display</string>
-    <string name="imagePreviewText">Bitmap Preview:</string>
-    <string name="pleaseWaitWhileFlashingText">Please wait...</string>
-    <string name="reflash_cta_text">Reflash Last Image</string>
+    <string name="flashButtonText">これでおｋ</string>
+    <string name="image_preview_content_description">プレビュー</string>
+    <string name="hold_phone_to_flash_text">(^^♪</string>
+    <string name="imagePreviewText">どるどるトークを重ねてね</string>
+    <string name="pleaseWaitWhileFlashingText">しばらく待とう</string>
+    <string name="reflash_cta_text">どるどるトークを始めよう！</string>
 </resources>

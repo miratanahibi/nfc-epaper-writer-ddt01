@@ -1,5 +1,10 @@
 html, body {
-	max-width: 100%;
+	  display: flex; /* body を Flex コンテナにする */
+      flex-direction: column; /* 子要素 (canvasWrapper, inputArea) を縦に並べる */
+      align-items: center; /* 子要素を水平方向中央に配置する */
+      min-height: 100vh; /* 画面全体の高さを確保 (スクロールが出る場合などに応じて調整) */
+      margin: 0; /* デフォルトマージンをリセット */
+      padding: 10px 0; /* 上下に少しパディング */
 }
 
 p {
@@ -7,14 +12,53 @@ p {
 	color: white;
 }
 .canvasWrapper {
-	margin-top: 8px;
-	justify-content: center;
+	margin-top: 8px; /* 既存 */
+    margin-bottom: 20px; /* ★ canvasWrapper の下に明確なマージンを確保 */
+    max-width: fit-content;
+    /*border: 1px dashed blue; /* ★ デバッグ用に境界線を追加 */
+    padding: 5px; /* ★ デバッグ用にパディングを追加 */
 }
 canvas {
 	margin: 10px;
 	border: 1px dashed black;
 	transform-origin: top center;
 	transform: scale(1);
+	display: block; /* ★ canvasをブロック要素として扱うことを明示 (マージンの挙動を安定させるため) */
+}
+.inputArea {
+	display: flex; /* .flex クラスから提供されるが、明示 */
+	/* flex-direction: row; /* .row クラスで提供 */
+	justify-content: center; /* textareaとbuttonsWrapperのグループをinputArea内で中央に */
+	align-items: flex-start; /* 上端揃えなど */
+	width: 90%; /* body の align-items: center で中央揃えされるための基準幅 */
+	max-width: 700px; /* inputArea の最大幅 */
+	margin-top: 20px; /* canvasWrapperとの間にマージン */
+	padding: 15px;
+	box-sizing: border-box;
+	/*border: 1px solid lightgray; /* 範囲確認用（任意） */
+}
+
+#textInput {
+	min-height: 100px;
+	width: 80%;
+	max-width: 500px;
+	/* .col クラス (flex-grow: 1) があるので、幅はflexの計算に依存 */
+	/* もし固定幅にしたいなら .col の影響を考慮 */
+	flex-grow: 0;
+	flex-basis: auto;
+	/* max-width: 500px; /* 必要であれば最大幅も */
+}
+
+.buttonsWrapper {
+	display: none;
+}
+
+.buttonsWrapper button {
+	padding: 4px 8px;
+	margin: 7px 0; /* 上下マージンのみ */
+	font-size: 1.2rem;
+	width: 100%; /* buttonsWrapperの幅に合わせる */
+	max-width: 150px; /* ボタン自体の最大幅 */
 }
 
 .flex {

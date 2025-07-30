@@ -31,9 +31,10 @@ class MainActivity : AppCompatActivity() {
 
         // Get user preferences
         this.mPreferencesController = Preferences(this)
-        this.updateScreenSizeDisplay(null)
+        //this.updateScreenSizeDisplay(null)
 
         // Setup screen size changer
+        /*
         val screenSizeChangeInvite: Button = findViewById(R.id.changeDisplaySizeInvite)
         screenSizeChangeInvite.setOnClickListener {
             this.mPreferencesController?.showScreenSizePicker(fun(updated: String): Void? {
@@ -41,6 +42,7 @@ class MainActivity : AppCompatActivity() {
                 return null
             })
         }
+        */
 
         // Check for previously generated image, enable re-flash button if available
         checkReFlashAbility()
@@ -69,12 +71,14 @@ class MainActivity : AppCompatActivity() {
                 .start(this)
         }
 
+        /*
         // Setup WYSIWYG button click
         val wysiwygEditButtonInvite: Button = findViewById(R.id.cta_new_graphic)
         wysiwygEditButtonInvite.setOnClickListener {
             val intent = Intent(this, WysiwygEditor::class.java)
             startActivity(intent)
         }
+        */
 
         // Setup text button click
         val textEditButtonInvite: Button = findViewById(R.id.cta_new_text)
@@ -115,6 +119,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /*
     private fun updateScreenSizeDisplay(updated: String?) {
         var screenSizeStr = updated
         if (screenSizeStr == null) {
@@ -123,7 +128,7 @@ class MainActivity : AppCompatActivity() {
         }
         findViewById<TextView>(R.id.currentDisplaySize).text = screenSizeStr ?: DefaultScreenSize
     }
-
+    */
     private fun checkReFlashAbility() {
         val lastGeneratedFile = getFileStreamPath(GeneratedImageFilename)
         val reFlashImagePreview: ImageView = findViewById(R.id.reflashButtonImage)
