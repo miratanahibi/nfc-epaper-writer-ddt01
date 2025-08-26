@@ -4,11 +4,10 @@
 
     <!--<uses-sdk android:minSdkVersion="30" />-->
 
-    <uses-permission android:name="android.permission.NFC" /> <!-- This will prevent app from **showing** in app-store for phones without NFC -->
+    <uses-permission android:name="android.permission.NFC" />
     <uses-feature
         android:name="android.hardware.nfc"
         android:required="true" />
-    <!-- This is for the WYSIWYG app - remove if rolling own version -->
     <uses-permission android:name="android.permission.INTERNET" />
 
     <application
@@ -19,35 +18,59 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.NFCEInkWriter">
-        <activity android:name=".NfcFlasher" android:launchMode="singleTask">
+
+        <!-- NfcFlasher: NFCインテントを受け取るため exported="true" -->
+        <activity
+            android:name=".NfcFlasher"
+            android:launchMode="singleTask"
+            android:exported="true">
             <!--
                 Note: This is not currently working, cannot override AAR this way
                 @TODO - hook into foreground dispatch system
                     - Suggested here: https://developer.android.com/guide/topics/connectivity/nfc/nfc.html#aar
                     - Implementation: https://developer.android.com/guide/topics/connectivity/nfc/advanced-nfc#foreground-dispatch
             -->
-            <!--<intent-filter>-->
-            <!--    <action android:name="android.nfc.action.NDEF_DISCOVERED" />-->
-
-            <!--    <category android:name="android.intent.category.DEFAULT" />-->
-
-            <!--    <data-->
-            <!--        android:host="ext"-->
-            <!--        android:pathPattern=".*waveshare.feng.nfctag.*"-->
-            <!--        android:scheme="vnd.android.nfc" />-->
-            <!--</intent-filter>-->
+            <!-- フォアグラウンドディスパッチで対応する場合、ここでの intent-filter は必須ではない -->
+            <!-- もし NDEF_DISCOVERED の intent-filter を有効にする場合は exported="true" が必須 -->
+            <!--
+            <intent-filter>
+                <action android:name="android.nfc.action.NDEF_DISCOVERED" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data
+                    android:host="ext"
+                    android:pathPattern=".*waveshare.feng.nfctag.*"
+                    android:scheme="vnd.android.nfc" />
+            </intent-filter>
+            -->
         </activity>
-        <activity android:name=".TextEditor" />
-        <activity android:name=".WysiwygEditor" />
-        <activity android:name=".MainActivity">
+
+        <!-- TextEditor: アプリ内部からのみ呼び出すと仮定し exported="false" -->
+        <activity
+            android:name=".TextEditor"
+            android:exported="false" />
+
+        <!-- WysiwygEditor: アプリ内部からのみ呼び出すと仮定し exported="false" -->
+        <activity
+            android:name=".WysiwygEditor"
+            android:exported="false" />
+
+        <!-- MainActivity: ランチャーアクティビティのため exported="true" -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
-
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-        <activity android:name="com.canhub.cropper.CropImageActivity"
-            android:theme="@style/Base.Theme.AppCompat"/>
+
+        <!-- com.canhub.cropper.CropImageActivity: 外部ライブラリ。呼び出し元に応じて設定 -->
+        <!-- 一般的には true が安全か、ライブラリの推奨を確認 -->
+        <activity
+            android:name="com.canhub.cropper.CropImageActivity"
+            android:theme="@style/Base.Theme.AppCompat"
+            android:exported="true" /> <!-- または false (ライブラリの仕様による) -->
+
     </application>
 
 </manifest>
