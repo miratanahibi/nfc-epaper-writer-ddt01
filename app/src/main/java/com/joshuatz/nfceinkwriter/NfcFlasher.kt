@@ -8,11 +8,13 @@ import android.graphics.BitmapFactory
 import android.net.Uri
 import android.nfc.NfcAdapter
 import android.nfc.Tag
+import android.nfc.tech.IsoDep
 import android.nfc.tech.NfcA
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.util.Log
 import android.view.View
 import android.widget.ImageView
@@ -22,12 +24,21 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.constraintlayout.widget.ConstraintLayout
 //import androidx.glance.visibility
 import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job // Jobをインポート
+import kotlinx.coroutines.delay // delayをインポート
+import kotlinx.coroutines.isActive // isActiveをインポート
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.cancelAndJoin // cancelAndJoinをインポート
 import waveshare.feng.nfctag.activity.WaveShareHandler
 import java.io.IOException
 import java.nio.charset.StandardCharsets
+// import kotlin.collections.copyOfRange // 必要であればコメント解除
+// import kotlin.ranges.coerceAtMost // 必要であればコメント解除
+// import kotlin.ranges.coerceIn // 必要であればコメント解除
+// import kotlin.text.toByte // 必要であればコメント解除
 
 class NfcFlasher : AppCompatActivity() {
     private var mIsFlashing = false
@@ -44,7 +55,10 @@ class NfcFlasher : AppCompatActivity() {
 
     private var mNfcAdapter: NfcAdapter? = null
     private var mPendingIntent: PendingIntent? = null
-    private var mNfcTechList = arrayOf(arrayOf(NfcA::class.java.name))
+    private var mNfcTechList = arrayOf(
+        arrayOf(NfcA::class.java.name),
+        arrayOf(IsoDep::class.java.name)
+    )
     private var mNfcIntentFilters: Array<IntentFilter>? = null
     private var mNfcCheckHandler: Handler? = null
     private val mNfcCheckIntervalMs = 250L
@@ -139,7 +153,9 @@ class NfcFlasher : AppCompatActivity() {
         Log.i("NfcFlasher_onNewIntent", "Received new intent. Action: ${intent.action ?: "no action"}")
 
         val preferences = Preferences(this)
-        val screenSizeEnum = preferences.getScreenSizeEnum() // This should correspond to EInkSizeType in iOS
+        val screenSizeEnumForWaveShareHandler = preferences.getScreenSizeEnum()
+        val targetEpdModel = 6
+
         val action = intent.action
 
         if (NfcAdapter.ACTION_TECH_DISCOVERED == action ||
@@ -161,7 +177,8 @@ class NfcFlasher : AppCompatActivity() {
 
             val tagIdHex = detectedTag.id.joinToString("") { "%02x".format(it) }
             Log.i("NfcFlasher_onNewIntent", "Tag ID (Hex): $tagIdHex")
-            Log.i("NfcFlasher_onNewIntent", "Available Tag Technologies: ${detectedTag.techList.joinToString(", ")}")
+            val techListString = detectedTag.techList.joinToString(", ")
+            Log.i("NfcFlasher_onNewIntent", "Available Tag Technologies: $techListString")
 
             val currentBitmap = this.mBitmap
             if (currentBitmap == null) {
@@ -173,7 +190,16 @@ class NfcFlasher : AppCompatActivity() {
             if (!mIsFlashing) {
                 Log.i("NfcFlasher_onNewIntent", "Preparing to flash image...")
                 lifecycleScope.launch {
-                    flashBitmap(detectedTag, currentBitmap, screenSizeEnum)
+                    if (techListString.contains("android.nfc.tech.IsoDep")) {
+                        Log.i("NfcFlasher_onNewIntent", "IsoDep detected. Attempting new firmware flashing logic.")
+                        flashBitmapWithIsoDep(detectedTag, currentBitmap, targetEpdModel)
+                    } else if (techListString.contains("android.nfc.tech.NfcA")) {
+                        Log.i("NfcFlasher_onNewIntent", "NfcA detected (and not IsoDep). Attempting old firmware flashing logic.")
+                        flashBitmapWithNfcA(detectedTag, currentBitmap, screenSizeEnumForWaveShareHandler)
+                    } else {
+                        Log.w("NfcFlasher_onNewIntent", "No supported NFC technology found for flashing (IsoDep or NfcA).")
+                        runOnUiThread { Toast.makeText(applicationContext, "対応していないNFCタグタイプです。", Toast.LENGTH_LONG).show() }
+                    }
                 }
             } else {
                 Log.w("NfcFlasher_onNewIntent", "Flashing operation already in progress. Ignoring new tag.")
@@ -183,100 +209,285 @@ class NfcFlasher : AppCompatActivity() {
         }
     }
 
-    private suspend fun flashBitmap(tag: Tag, bitmapToFlash: Bitmap, screenSizeEnum: Int) {
+    private suspend fun flashBitmapWithIsoDep(tag: Tag, bitmapToFlash: Bitmap, epdModel: Int) {
         if (mIsFlashing) {
-            Log.w("NfcFlasher_flashBitmap", "Attempted to start flashBitmap while already flashing. Aborting.")
+            Log.w("NfcFlasher_flashBitmapWithIsoDep", "Attempted to start flash while already flashing. Aborting.")
+            return
+        }
+        this.mIsFlashing = true
+        var isoDep: IsoDep? = null
+        var success = false
+
+        try {
+            withContext(Dispatchers.IO) {
+                isoDep = IsoDep.get(tag)
+                if (isoDep == null) {
+                    Log.e("NfcFlasher_flashBitmapWithIsoDep", "IsoDep technology not available for this tag.")
+                    runOnUiThread { Toast.makeText(applicationContext, "NFCエラー: IsoDep非対応のタグです。", Toast.LENGTH_LONG).show() }
+                    return@withContext
+                }
+
+                isoDep?.connect()
+                if (isoDep?.isConnected != true) {
+                    Log.e("NfcFlasher_flashBitmapWithIsoDep", "Failed to connect to IsoDep.")
+                    runOnUiThread { Toast.makeText(applicationContext, "NFC接続エラー (IsoDep)", Toast.LENGTH_LONG).show() }
+                    return@withContext
+                }
+                isoDep?.timeout = 5000
+
+                Log.i("NfcFlasher_IsoDep", "Starting IsoDep flashing for EPD=$epdModel (2.7 inch)")
+
+                val initCommands = listOf(
+                    Pair(byteArrayOf(0x74, 0x99.toByte(), 0x00, 0x0D.toByte(), 0x01, 0x21), byteArrayOf(0x74, 0x9a.toByte(), 0x00, 0x0E.toByte(), 0x02, 0x48, 0x00)),
+                    Pair(byteArrayOf(0x74, 0x99.toByte(), 0x00, 0x0D.toByte(), 0x01, 0x18), byteArrayOf(0x74, 0x9a.toByte(), 0x00, 0x0E.toByte(), 0x01, 0x80.toByte())),
+                    Pair(byteArrayOf(0x74, 0x99.toByte(), 0x00, 0x0D.toByte(), 0x01, 0x22), byteArrayOf(0x74, 0x9a.toByte(), 0x00, 0x0E.toByte(), 0x01, 0xB1.toByte())),
+                    Pair(byteArrayOf(0x74, 0x99.toByte(), 0x00, 0x0D.toByte(), 0x01, 0x20), null),
+                    Pair(byteArrayOf(0x74, 0x99.toByte(), 0x00, 0x0D.toByte(), 0x01, 0x1A), byteArrayOf(0x74, 0x9a.toByte(), 0x00, 0x0E.toByte(), 0x02, 0x64,0x00)),
+                    Pair(byteArrayOf(0x74, 0x99.toByte(), 0x00, 0x0D.toByte(), 0x01, 0x45), byteArrayOf(0x74, 0x9a.toByte(), 0x00, 0x0E.toByte(), 0x04, 0x00, 0x00, 0x07, 0x01)),
+                    Pair(byteArrayOf(0x74, 0x99.toByte(), 0x00, 0x0D.toByte(), 0x01, 0x4F.toByte()), byteArrayOf(0x74, 0x9a.toByte(), 0x00, 0x0E.toByte(), 0x02, 0x00, 0x00)),
+                    Pair(byteArrayOf(0x74, 0x99.toByte(), 0x00, 0x0D.toByte(), 0x01, 0x11), byteArrayOf(0x74, 0x9a.toByte(), 0x00, 0x0E.toByte(), 0x01, 0x03)),
+                    Pair(byteArrayOf(0x74, 0x99.toByte(), 0x00, 0x0D.toByte(), 0x01, 0x22), byteArrayOf(0x74, 0x9a.toByte(), 0x00, 0x0E.toByte(), 0x01, 0x91.toByte())),
+                    Pair(byteArrayOf(0x74, 0x99.toByte(), 0x00, 0x0D.toByte(), 0x01, 0x20), null)
+                )
+
+                var currentProgress = 0
+                val totalInitSteps = initCommands.size * 2
+                fun updateInitProgress() {
+                    currentProgress++
+                    val progressPercentage = (currentProgress * 100 / totalInitSteps).coerceIn(0,15)
+                    runOnUiThread { mProgressBar?.progress = progressPercentage }
+                }
+
+                for ((cmd, data) in initCommands) {
+                    var response = isoDep?.transceive(cmd)
+                    updateInitProgress()
+                    if (response == null || response.size < 2 || response[0] != 0x90.toByte() || response[1] != 0x00.toByte()) {
+                        Log.e("NfcFlasher_IsoDep", "Init CMD failed: ${cmd.toHexString()}. Response: ${response?.toHexString() ?: "null"}")
+                        throw IOException("初期化コマンド失敗: ${cmd.toHexString()}")
+                    }
+                    if (data != null) {
+                        response = isoDep?.transceive(data)
+                        updateInitProgress()
+                        if (response == null || response.size < 2 || response[0] != 0x90.toByte() || response[1] != 0x00.toByte()) {
+                            Log.e("NfcFlasher_IsoDep", "Init DATA failed for CMD ${cmd.toHexString()}: ${data.toHexString()}. Response: ${response?.toHexString() ?: "null"}")
+                            throw IOException("初期化データ失敗: ${data.toHexString()}")
+                        }
+                    }
+                    if (cmd.contentEquals(byteArrayOf(0x74, 0x99.toByte(), 0x00, 0x0D.toByte(), 0x01, 0x20))) {
+                        SystemClock.sleep(100)
+                    }
+                }
+                Log.i("NfcFlasher_IsoDep", "Initialization sequence complete.")
+                runOnUiThread { mProgressBar?.progress = 15 }
+
+                val epdNativeWidth = 176
+                val epdNativeHeight = 264
+                val (picSend, _) = Utils.convertBitmapToEpdData(bitmapToFlash, epdNativeWidth, epdNativeHeight, rotate270 = true, invertPackedBits = true)
+                Log.i("NfcFlasher_IsoDep", "Image prepared. Size: ${picSend.size} bytes.")
+                runOnUiThread { mProgressBar?.progress = 20 }
+
+                val dtm1Cmd = byteArrayOf(0x74, 0x99.toByte(), 0x00, 0x0D.toByte(), 0x01, 0x24)
+                var response = isoDep?.transceive(dtm1Cmd)
+                if (response == null || response.size < 2 || response[0] != 0x90.toByte() || response[1] != 0x00.toByte()) {
+                    Log.e("NfcFlasher_IsoDep", "DTM1 CMD (0x24) failed: ${dtm1Cmd.toHexString()}. Response: ${response?.toHexString() ?: "null"}")
+                    throw IOException("データ送信開始コマンド(0x24)失敗")
+                }
+                Log.i("NfcFlasher_IsoDep", "DTM1 (0x24) sent.")
+                runOnUiThread { mProgressBar?.progress = 22 }
+
+                val compressedData = Utils.compressEpdData(picSend, 5796)
+                Log.i("NfcFlasher_IsoDep", "Image data compressed. Original: ${picSend.size}, Compressed: ${compressedData.size}")
+                runOnUiThread { mProgressBar?.progress = 25 }
+
+                val sendDataCmdHeaderWithP3 = byteArrayOf(
+                    0x74.toByte(), 0x9E.toByte(), 0x00.toByte(), 0x00.toByte(), 0x00.toByte()
+                )
+                val maxChunkSize = 1016
+                var sentBytes = 0
+                while (sentBytes < compressedData.size) {
+                    val remainingBytes = compressedData.size - sentBytes
+                    val chunkSize = remainingBytes.coerceAtMost(maxChunkSize)
+                    val chunk = compressedData.copyOfRange(sentBytes, sentBytes + chunkSize)
+                    val fullCmd = ByteArray(sendDataCmdHeaderWithP3.size + 2 + chunk.size)
+                    System.arraycopy(sendDataCmdHeaderWithP3, 0, fullCmd, 0, sendDataCmdHeaderWithP3.size)
+                    fullCmd[sendDataCmdHeaderWithP3.size] = (chunkSize shr 8 and 0xFF).toByte()
+                    fullCmd[sendDataCmdHeaderWithP3.size + 1] = (chunkSize and 0xFF).toByte()
+                    System.arraycopy(chunk, 0, fullCmd, sendDataCmdHeaderWithP3.size + 2, chunk.size)
+
+                    response = isoDep?.transceive(fullCmd)
+                    if (response == null || response.size < 2 || response[0] != 0x90.toByte() || response[1] != 0x00.toByte()) {
+                        Log.e("NfcFlasher_IsoDep", "Send Data chunk failed. Offset: $sentBytes. Cmd: ${fullCmd.toHexString(chunkSize + sendDataCmdHeaderWithP3.size + 2)}. Response: ${response?.toHexString() ?: "null"}")
+                        throw IOException("データ送信失敗 (オフセット: $sentBytes)")
+                    }
+                    sentBytes += chunkSize
+                    val progressPercentage = 25 + (sentBytes * 65 / compressedData.size).coerceIn(0,65)
+                    runOnUiThread { mProgressBar?.progress = progressPercentage }
+                    Log.d("NfcFlasher_IsoDep", "Sent $chunkSize bytes. Total sent: $sentBytes / ${compressedData.size}. Progress: $progressPercentage%")
+                }
+                Log.i("NfcFlasher_IsoDep", "All image data sent.")
+                runOnUiThread { mProgressBar?.progress = 90 }
+
+                val refreshCmds = listOf(
+                    Pair(byteArrayOf(0x74, 0x99.toByte(), 0x00, 0x0D.toByte(), 0x01, 0x22), byteArrayOf(0x74, 0x9a.toByte(), 0x00, 0x0E.toByte(), 0x01, 0xC7.toByte())),
+                    Pair(byteArrayOf(0x74, 0x99.toByte(), 0x00, 0x0D.toByte(), 0x01, 0x20), null)
+                )
+                for ((cmd, data) in refreshCmds) {
+                    response = isoDep?.transceive(cmd)
+                    if (response == null || response.size < 2 || response[0] != 0x90.toByte() || response[1] != 0x00.toByte()) {
+                        Log.e("NfcFlasher_IsoDep", "Refresh CMD failed: ${cmd.toHexString()}. Response: ${response?.toHexString() ?: "null"}")
+                        throw IOException("リフレッシュコマンド失敗: ${cmd.toHexString()}")
+                    }
+                    if (data != null) {
+                        response = isoDep?.transceive(data)
+                        if (response == null || response.size < 2 || response[0] != 0x90.toByte() || response[1] != 0x00.toByte()) {
+                            Log.e("NfcFlasher_IsoDep", "Refresh DATA failed: ${data.toHexString()}. Response: ${response?.toHexString() ?: "null"}")
+                            throw IOException("リフレッシュデータ失敗: ${data.toHexString()}")
+                        }
+                    }
+                }
+                Log.i("NfcFlasher_IsoDep", "Refresh sequence sent.")
+                runOnUiThread { mProgressBar?.progress = 95 }
+
+                SystemClock.sleep(1000)
+                val busyCmd = byteArrayOf(0x74, 0x9B.toByte(), 0x00, 0x0F.toByte(), 0x01)
+                var busyRetries = 0
+                val maxBusyRetries = 100
+                while (busyRetries < maxBusyRetries) {
+                    response = isoDep?.transceive(busyCmd)
+                    if (response != null && response.isNotEmpty() && response[0] == 0x00.toByte()) {
+                        Log.i("NfcFlasher_IsoDep", "Device no longer busy. Response: ${response.toHexString()}")
+                        break
+                    }
+                    Log.d("NfcFlasher_IsoDep", "Still busy or unexpected response: ${response?.toHexString() ?: "null"}. Retry: $busyRetries")
+                    busyRetries++
+                    if (busyRetries >= maxBusyRetries) {
+                        Log.w("NfcFlasher_IsoDep", "Busy wait timeout after $maxBusyRetries retries.")
+                    }
+                    SystemClock.sleep(250)
+                }
+                success = true
+                runOnUiThread { mProgressBar?.progress = 100 }
+            }
+        } catch (e: IOException) {
+            Log.e("NfcFlasher_flashBitmapWithIsoDep", "IOException: ${e.message}", e)
+            runOnUiThread { Toast.makeText(applicationContext, "NFC通信エラー(I): ${e.localizedMessage}", Toast.LENGTH_LONG).show() }
+        } catch (e: Exception) {
+            Log.e("NfcFlasher_flashBitmapWithIsoDep", "Generic exception: ${e.message}", e)
+            runOnUiThread { Toast.makeText(applicationContext, "予期せぬエラー(I): ${e.localizedMessage}", Toast.LENGTH_LONG).show() }
+        } finally {
+            try {
+                isoDep?.close()
+                Log.i("NfcFlasher_flashBitmapWithIsoDep", "IsoDep connection closed.")
+            } catch (e: IOException) {
+                Log.e("NfcFlasher_flashBitmapWithIsoDep", "Error closing IsoDep: ${e.message}", e)
+            }
+            this.mIsFlashing = false
+            runOnUiThread {
+                val toastMsg = if (success) "書き込み成功！ (IsoDep)" else "書き込み失敗 (IsoDep)"
+                Toast.makeText(applicationContext, toastMsg, Toast.LENGTH_LONG).show()
+                if (success) {
+                    Log.i("NfcFlasher_flashBitmapWithIsoDep", "Flashing successful via IsoDep.")
+                } else {
+                    Log.e("NfcFlasher_flashBitmapWithIsoDep", "Flashing failed via IsoDep.")
+                }
+            }
+            Log.i("NfcFlasher_flashBitmapWithIsoDep", "IsoDep Flashing process finished (in finally block).")
+        }
+    }
+
+    private suspend fun flashBitmapWithNfcA(tag: Tag, bitmapToFlash: Bitmap, screenSizeEnumForWaveShare: Int) {
+        if (mIsFlashing) {
+            Log.w("NfcFlasher_flashBitmapWithNfcA", "Attempted to start flash while already flashing. Aborting.")
             return
         }
         this.mIsFlashing = true
         val waveShareHandler = WaveShareHandler(this@NfcFlasher)
         var nfcAForClosing: NfcA? = null
+        var progressAnimatorJob: Job? = null // Jobを保持する変数を追加
 
         try {
+            // NfcAの処理はIOスレッドで行い、UI更新はメインスレッドで行う
             withContext(Dispatchers.IO) {
                 val nfcConnection = NfcA.get(tag)
                 if (nfcConnection == null) {
-                    Log.e("NfcFlasher_flashBitmap", "NfcA technology not available for this tag.")
-                    runOnUiThread { Toast.makeText(applicationContext, "NFCエラー: NfcA非対応のタグです。", Toast.LENGTH_LONG).show() }
-                    this@NfcFlasher.mIsFlashing = false
+                    Log.e("NfcFlasher_flashBitmapWithNfcA", "NfcA technology not available for this tag.")
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(applicationContext, "NFCエラー: NfcA非対応のタグです。", Toast.LENGTH_LONG).show()
+                    }
+                    this@NfcFlasher.mIsFlashing = false // Reset flashing state early
                     return@withContext
                 }
                 nfcAForClosing = nfcConnection
 
-                val techList = tag.techList.joinToString()
-                // Consider a more robust way to determine if it's new firmware or specific model
-                // For now, using IsoDep check as a proxy for "new firmware" which might include 2.7inch
-                val isLikelyNewFirmwareOr27Inch = techList.contains("android.nfc.tech.IsoDep")
-                Log.i("NfcFlasher_flashBitmap", "Tag TechList: $techList. Is new firmware/2.7inch? $isLikelyNewFirmwareOr27Inch")
+                val passwordForOldSdk = "1234".toByteArray(StandardCharsets.US_ASCII)
+                Log.i("NfcFlasher_flashBitmapWithNfcA", "Old firmware (NfcA). Using password '1234' for WaveShareHandler.sendBitmap.")
 
-                val passwordToUseForSdk: ByteArray?
-
-                // Based on iOS demo: EInkSizeType270 (which is our target new firmware device)
-                // seems to be called with [AccountModel shared].password, which might be nil or empty if not set.
-                // Other "new" looking models in iOS also used [AccountModel shared].password
-                // EINK_154_B and EINK_154_Y used `nil` explicitly in iOS.
-
-                if (isLikelyNewFirmwareOr27Inch) {
-                    // ★★★ MODIFIED PART START ★★★
-                    Log.i("NfcFlasher_flashBitmap", "New firmware/2.7inch detected. Attempting with EMPTY STRING password for SDK sendBitmap.")
-                    passwordToUseForSdk = "".toByteArray(StandardCharsets.US_ASCII)
-                    // ★★★ MODIFIED PART END ★★★
-                } else {
-                    // This branch would be for older firmware types that are NOT IsoDep based.
-                    // For example, if EINK_154_B/Y were not IsoDep and needed nil.
-                    // Or if some other old type needed "1234".
-                    // For now, let's assume non-IsoDep tags might be older ones that worked with "1234" or null.
-                    // Adjust this based on which exact "old firmware" you are targeting with this else block.
-                    // If your "old successful firmware" was, for instance, 1.54inch which used `nil` in iOS:
-                    // passwordToUseForSdk = null
-                    // Log.i("NfcFlasher_flashBitmap", "Old firmware (e.g. 1.54 non-IsoDep). Attempting with NULL password.")
-                    // If it was another type that previously worked with "1234":
-                    Log.i("NfcFlasher_flashBitmap", "Old firmware (non-IsoDep). Using default password '1234' for SDK sendBitmap.")
-                    passwordToUseForSdk = "1234".toByteArray(StandardCharsets.US_ASCII)
+                // UIスレッドで初期プログレスを設定
+                withContext(Dispatchers.Main) {
+                    mProgressBar?.progress = 10
                 }
 
-                val passwordLogOutput = when {
-                    passwordToUseForSdk == null -> "null"
-                    passwordToUseForSdk.isEmpty() -> "empty string"
-                    else -> "********"
-                }
-                Log.d("NfcFlasher_flashBitmap", "Calling WaveShareHandler.sendBitmap (password: $passwordLogOutput)")
+                // プログレスバーを擬似的に動かすコルーチンを開始
+                progressAnimatorJob = CoroutineScope(Dispatchers.Main + Job()).launch { // 新しいJobで起動
+                    var currentSimulatedProgress = 10
+                    val estimatedDurationMs = 5000L // WaveShare SDKのおおよその処理時間 (要調整、例: 5秒)
+                    val updateIntervalMs = 200L
+                    val progressSteps = (estimatedDurationMs / updateIntervalMs).toInt()
+                    val progressIncrement = if (progressSteps > 0) (80 / progressSteps).coerceAtLeast(1) else 1 // 10%から90%の間を分割
 
+                    for (i in 0 until progressSteps) {
+                        if (!this@NfcFlasher.mIsFlashing || !isActive) break
+                        currentSimulatedProgress += progressIncrement
+                        mProgressBar?.progress = currentSimulatedProgress.coerceIn(10, 90)
+                        delay(updateIntervalMs)
+                    }
+                }
+
+                // SDKの処理を実行 (これが時間のかかる処理)
                 val result = waveShareHandler.sendBitmap(
                     nfcConnection,
-                    screenSizeEnum,
+                    screenSizeEnumForWaveShare,
                     bitmapToFlash,
-                    passwordToUseForSdk
+                    passwordForOldSdk
                 )
 
-                runOnUiThread {
-                    val toastMsg = if (result.success) "書き込み成功！" else "書き込み失敗: ${result.errMessage}"
+                progressAnimatorJob?.cancelAndJoin() // アニメーションコルーチンを確実に停止し、完了を待つ
+
+                // UIスレッドで最終的なプログレスとトーストを設定
+                withContext(Dispatchers.Main) {
+                    mProgressBar?.progress = if (result.success) 100 else (mProgressBar?.progress ?: 50)
+                    val toastMsg = if (result.success) "書き込み成功！ (NfcA)" else "書き込み失敗 (NfcA): ${result.errMessage}"
                     Toast.makeText(applicationContext, toastMsg, Toast.LENGTH_LONG).show()
                     if (result.success) {
-                        Log.i("NfcFlasher_flashBitmap", "sendBitmap successful.")
+                        Log.i("NfcFlasher_flashBitmapWithNfcA", "WaveShareHandler.sendBitmap successful.")
                     } else {
-                        Log.e("NfcFlasher_flashBitmap", "sendBitmap failed: ${result.errMessage}")
+                        Log.e("NfcFlasher_flashBitmapWithNfcA", "WaveShareHandler.sendBitmap failed: ${result.errMessage}")
                     }
                 }
             }
         } catch (e: IOException) {
-            Log.e("NfcFlasher_flashBitmap", "IOException during flashBitmap's IO context: ${e.message}", e)
-            runOnUiThread { Toast.makeText(applicationContext, "NFC通信エラー: ${e.localizedMessage}", Toast.LENGTH_LONG).show() }
+            progressAnimatorJob?.cancel() // エラー時もアニメーションを停止
+            Log.e("NfcFlasher_flashBitmapWithNfcA", "IOException during NfcA flashBitmap: ${e.message}", e)
+            runOnUiThread { Toast.makeText(applicationContext, "NFC通信エラー(A): ${e.localizedMessage}", Toast.LENGTH_LONG).show() }
         } catch (e: Exception) {
-            Log.e("NfcFlasher_flashBitmap", "Generic exception in flashBitmap: ${e.message}", e)
-            runOnUiThread { Toast.makeText(applicationContext, "予期せぬエラー: ${e.localizedMessage}", Toast.LENGTH_LONG).show() }
+            progressAnimatorJob?.cancel() // エラー時もアニメーションを停止
+            Log.e("NfcFlasher_flashBitmapWithNfcA", "Generic exception in NfcA flashBitmap: ${e.message}", e)
+            runOnUiThread { Toast.makeText(applicationContext, "予期せぬエラー(A): ${e.localizedMessage}", Toast.LENGTH_LONG).show() }
         } finally {
+            progressAnimatorJob?.cancel() // finallyでも念のため停止
             val nfcToClose = nfcAForClosing
             try {
                 if (nfcToClose?.isConnected == true) {
-                    nfcToClose.close()
-                    Log.i("NfcFlasher_flashBitmap", "NfcA connection explicitly closed in finally (if app was owner).")
+                    withContext(Dispatchers.IO) { // Close on IO thread
+                        nfcToClose.close()
+                    }
+                    Log.i("NfcFlasher_flashBitmapWithNfcA", "NfcA connection explicitly closed in finally.")
                 }
             } catch (e: IOException) {
-                Log.e("NfcFlasher_flashBitmap", "Error closing NfcA in finally: ${e.message}", e)
+                Log.e("NfcFlasher_flashBitmapWithNfcA", "Error closing NfcA in finally: ${e.message}", e)
             }
-            this.mIsFlashing = false
-            Log.i("NfcFlasher_flashBitmap", "Flashing process finished (in finally block).")
+            this.mIsFlashing = false // Ensure mIsFlashing is reset
+            Log.i("NfcFlasher_flashBitmapWithNfcA", "NfcA Flashing process finished (in finally block).")
         }
     }
 
@@ -343,3 +554,9 @@ class NfcFlasher : AppCompatActivity() {
         }
     }
 }
+
+internal fun ByteArray.toHexString(length: Int = this.size): String {
+    val effectiveLength = length.coerceAtMost(this.size)
+    return this.take(effectiveLength).joinToString(separator = " ") { "%02X".format(it) }
+}
+
