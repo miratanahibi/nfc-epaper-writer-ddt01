@@ -1,14 +1,73 @@
+@font-face {
+    font-family: 'JKMaruGothicM'; /* Android側の FontItem.cssFontFamily と一致させる */
+    src: url('https://appassets.androidplatform.net/assets/fonts/JK-Maru-Gothic-M.otf'); /* アセット内のフォントファイルへのパス */
+}
+
+@font-face {
+    font-family: 'KeiFont'; /* Android側の FontItem.cssFontFamily と一致させる */
+    src: url('https://appassets.androidplatform.net/assets/fonts/keifont.ttf'); /* アセット内のフォントファイルへのパス */
+}
+
+@font-face {
+    font-family: 'Yosugara'; /* Android側の FontItem.cssFontFamily と一致させる */
+    src: url('https://appassets.androidplatform.net/assets/fonts/yosugaraver1_2.ttf'); /* アセット内のフォントファイルへのパス */
+}
+
+.canvasWrapper {
+    /* もし既存のスタイルがあれば、それをベースに調整 */
+    /* 例: 下側のマージンを調整して inputArea との間隔を制御 */
+    margin-bottom: 0px; /* または 0px など、より小さい値に */
+    /* width: 100%; */ /* 必要に応じて */
+    /* display: flex; justify-content: center; align-items: center; */ /* Canvasを中央揃えにする場合など */
+    box-sizing: border-box;
+}
+
 .inputArea {
-	justify-content: space-evenly;
+    display: flex; /* 子要素を横並びにするための基本 */
+    flex-direction: row; /* 横並びを明示 (デフォルト値だが確実にするため) */
+    align-items: flex-start; /* 子要素の上端を揃える。'center'で中央揃えも可 */
+    /* justify-content: space-evenly; */ /* 一旦コメントアウト。flex-grow:1 との挙動を見るため */
+    width: 100%; /* 親要素の幅いっぱいに広がるようにする (レイアウトによる) */
+    box-sizing: border-box; /* paddingやborderをwidth/heightに含める */
+    margin-bottom: 2px; /* 他の要素との間隔 */
 }
+
 #textInput {
-	min-height: 100px;
+	min-height: 70px;
+    flex-grow: 1; /* ★重要: 利用可能な残りのスペースを全てtextInputが取る */
+    /* width: 0; */ /* flex-growと併用する場合、初期幅を0にするとより正確に伸縮することがある */
+    margin-right: 8px; /* ボタンとの間にスペース */
+    /* 念のため、デフォルトの幅やマージンが影響しないようにリセットも考慮 */
+    box-sizing: border-box;
 }
+
 .buttonsWrapper {
-	align-content: center;
+    display: flex;
+    flex-direction: column; /* buttonsWrapper内のボタンは縦に並べる */
+    align-items: center;    /* buttonsWrapper内のボタンを水平中央揃えにする */
+    /* flex-grow: 0; */     /* buttonsWrapperは伸縮しない */
+    /* flex-shrink: 0; */   /* buttonsWrapperは縮まない */
+    /* width: auto; */      /* 中のボタンの幅に依存 */
+    box-sizing: border-box;
 }
+
+/* 既存の .buttonsWrapper button スタイル */
 .buttonsWrapper button {
 	padding: 4px 8px;
-	margin: 7px auto;
+	margin: 7px 0; /* ★左右マージンを0に (親のalign-itemsで中央揃え) */
 	font-size: 1.2rem;
+    white-space: nowrap;
+    writing-mode: horizontal-tb;
+    width: auto;
+    min-width: min-content; /* テキスト内容に応じた最小幅 */
+    box-sizing: border-box;
 }
+
+/* 「消す」ボタン(#clearTextButton) 専用のスタイル */
+button#clearTextButton {
+    font-size: 0.9rem;
+    padding: 2px 6px;
+    margin: 3px 0; /* ★左右マージンを0に */
+    /* width: auto; や white-space などは共通スタイルから継承 */
+}
+

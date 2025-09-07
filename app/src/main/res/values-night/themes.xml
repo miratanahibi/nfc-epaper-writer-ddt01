@@ -12,5 +12,15 @@
         <!-- Status bar color. -->
         <item name="android:statusBarColor" tools:targetApi="l">?attr/colorPrimaryVariant</item>
         <!-- Customize your theme here. -->
+
+        {/* --- 追加 --- */}
+        <item name="materialAlertDialogTheme">@style/AppMaterialAlertDialogTheme</item>
     </style>
+
+    {/*
+    AppMaterialAlertDialogTheme と AppAlertDialogButton のスタイル定義は
+    values/themes.xml にあるものがそのまま使われます。
+    ナイトモードでこれらのスタイルを上書きしたい場合は、このファイル内に
+    同名で再定義します。
+    */}
 </resources>

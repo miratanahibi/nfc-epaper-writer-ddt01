@@ -12,7 +12,39 @@
         <!-- Status bar color. -->
         <item name="android:statusBarColor" tools:targetApi="l">?attr/colorPrimaryVariant</item>
         <!-- Customize your theme here. -->
+
+        {/* --- ここから追加 --- */}
+        {/* MaterialAlertDialogのテーマを指定 */}
+        <item name="materialAlertDialogTheme">@style/AppMaterialAlertDialogTheme</item>
+        {/* --- ここまで追加 --- */}
     </style>
+
+    {/* --- ここから追加 --- */}
+    {/* AlertDialogのボタンテキスト色をカスタマイズするためのテーマ */}
+    <style name="AppMaterialAlertDialogTheme" parent="ThemeOverlay.MaterialComponents.MaterialAlertDialog">
+        {/* Positiveボタン (例: OK) のスタイル */}
+        <item name="buttonBarPositiveButtonStyle">@style/AppAlertDialogButton</item>
+        {/* Negativeボタン (例: キャンセル) のスタイル */}
+        <item name="buttonBarNegativeButtonStyle">@style/AppAlertDialogButton</item>
+        {/* Neutralボタンのスタイル (もし使う場合) */}
+        {/* <item name="buttonBarNeutralButtonStyle">@style/AppAlertDialogButton</item> */}
+    </style>
+
+    {/* AlertDialogのボタン共通スタイル (テキスト色を白に) */}
+    <style name="AppAlertDialogButton" parent="Widget.MaterialComponents.Button.TextButton.Dialog">
+        <item name="android:textColor">@color/white</item>
+        {/*
+        注意: ボタンの背景色が明るい場合、白い文字は見えません。
+        デフォルトのMaterialダイアログのボタン背景は透明に近いか、
+        テーマの colorSurface に依存することが多いです。
+        もし白い文字が見えにくい場合は、ボタンの背景色も変更する必要があります。
+        例: ボタンの背景をプライマリカラーにする場合
+        <item name="backgroundTint">?attr/colorPrimary</item>
+        または特定の濃い色を指定
+        <item name="backgroundTint">@color/blue_dark</item>
+        */}
+    </style>
+    {/* --- ここまで追加 --- */}
 
     <!-- Progress Bar Styles -->
     <style name="ProgressBarStyle">

@@ -1,26 +1,33 @@
 <!DOCTYPE html>
 <html>
-	<head>
-		<meta charset="utf-8" />
-		<meta http-equiv="X-UA-Compatible" content="IE=edge" />
-		<title>Page Title</title>
-		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<link rel="stylesheet" type="text/css" media="screen" href="../common.css" />
-		<link rel="stylesheet" type="text/css" media="screen" href="./style.css" />
-	</head>
-	<body>
-		<div class="canvasWrapper flex row">
-			<canvas width="296" height="128"></canvas>
-		</div>
-		<div class="inputArea flex row">
-			<textarea class="col shadow-md" id="textInput">（＾＾）</textarea>
-			<div class="flex row col buttonsWrapper">
-				<!--<button class="shadow-sm" id="addLineBreak">+ Line Break</button>
-				<button class="shadow-sm" id="setInverted">Invert</button>
-				<button class="shadow-sm" id="reset">Reset</button>-->
-			</div>
-		</div>
-		<script src="../common.js"></script>
-		<script src="main.js"></script>
-	</body>
+<head>
+	<meta charset="utf-8" />
+	<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+	<title>Page Title</title>
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<link rel="stylesheet" type="text/css" media="screen" href="../common.css" />
+	<link rel="stylesheet" type="text/css" media="screen" href="./style.css" />
+</head>
+<body>
+<div class="canvasWrapper flex row">
+	<!-- CanvasのIDが指定されていないので、JavaScriptから参照しやすいようにIDを追加することを推奨します -->
+	<!-- 例: <canvas id="previewCanvas" width="296" height="128"></canvas> -->
+	<canvas width="296" height="128"></canvas>
+</div>
+<div class="inputArea flex row">
+	<textarea class="col shadow-md" id="textInput">（＾＾）</textarea>
+	<div class="flex row col buttonsWrapper">
+		<!-- ▼▼▼ ここから追加 ▼▼▼ -->
+		<button class="shadow-sm" id="clearTextButton">消す</button>
+		<!-- ▲▲▲ ここまで追加 ▲▲▲ -->
+
+		<!-- 既存のコメントアウトされたボタン -->
+		<!-- <button class="shadow-sm" id="addLineBreak">+ Line Break</button> -->
+		<!-- <button class="shadow-sm" id="setInverted">Invert</button> -->
+		<!-- <button class="shadow-sm" id="reset">Reset</button> -->
+	</div>
+</div>
+<script src="../common.js"></script>
+<script src="main.js"></script>
+</body>
 </html>

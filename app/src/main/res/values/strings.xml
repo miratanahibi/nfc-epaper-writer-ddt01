@@ -10,4 +10,5 @@
     <string name="imagePreviewText">どるどるトークを重ねてね</string>
     <string name="pleaseWaitWhileFlashingText">しばらく待とう</string>
     <string name="reflash_cta_text">どるどるトークを始めよう！</string>
+    <string name="font_label">フォント:</string>
 </resources>
