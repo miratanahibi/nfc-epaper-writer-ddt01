@@ -1,73 +1,118 @@
-@font-face {
-    font-family: 'JKMaruGothicM'; /* Android側の FontItem.cssFontFamily と一致させる */
-    src: url('https://appassets.androidplatform.net/assets/fonts/JK-Maru-Gothic-M.otf'); /* アセット内のフォントファイルへのパス */
-}
+/* style.css - 修正案 */
 
-@font-face {
-    font-family: 'KeiFont'; /* Android側の FontItem.cssFontFamily と一致させる */
-    src: url('https://appassets.androidplatform.net/assets/fonts/keifont.ttf'); /* アセット内のフォントファイルへのパス */
-}
-
-@font-face {
-    font-family: 'Yosugara'; /* Android側の FontItem.cssFontFamily と一致させる */
-    src: url('https://appassets.androidplatform.net/assets/fonts/yosugaraver1_2.ttf'); /* アセット内のフォントファイルへのパス */
-}
-
-.canvasWrapper {
-    /* もし既存のスタイルがあれば、それをベースに調整 */
-    /* 例: 下側のマージンを調整して inputArea との間隔を制御 */
-    margin-bottom: 0px; /* または 0px など、より小さい値に */
-    /* width: 100%; */ /* 必要に応じて */
-    /* display: flex; justify-content: center; align-items: center; */ /* Canvasを中央揃えにする場合など */
+/* 1. 基本的なリセットとページ全体のFlex設定 */
+html, body {
+    height: 100%; /* ビューポートの高さいっぱいに */
+    margin: 0;
+    padding: 0;
+    font-family: sans-serif;
     box-sizing: border-box;
+    overflow: hidden; /* ページ全体のスクロールを禁止 */
 }
 
-.inputArea {
-    display: flex; /* 子要素を横並びにするための基本 */
-    flex-direction: row; /* 横並びを明示 (デフォルト値だが確実にするため) */
-    align-items: flex-start; /* 子要素の上端を揃える。'center'で中央揃えも可 */
-    /* justify-content: space-evenly; */ /* 一旦コメントアウト。flex-grow:1 との挙動を見るため */
-    width: 100%; /* 親要素の幅いっぱいに広がるようにする (レイアウトによる) */
-    box-sizing: border-box; /* paddingやborderをwidth/heightに含める */
-    margin-bottom: 2px; /* 他の要素との間隔 */
+*, *::before, *::after {
+    box-sizing: inherit; /* box-sizing をすべての要素に継承 */
 }
 
-#textInput {
-	min-height: 70px;
-    flex-grow: 1; /* ★重要: 利用可能な残りのスペースを全てtextInputが取る */
-    /* width: 0; */ /* flex-growと併用する場合、初期幅を0にするとより正確に伸縮することがある */
-    margin-right: 8px; /* ボタンとの間にスペース */
-    /* 念のため、デフォルトの幅やマージンが影響しないようにリセットも考慮 */
-    box-sizing: border-box;
+body {
+    display: flex; /* body をFlexコンテナに */
+    /* .page-container が body の唯一の子であると想定し、高さを100%にする */
 }
 
-.buttonsWrapper {
+/* 2. メインコンテナ (.page-container) */
+.page-container {
     display: flex;
-    flex-direction: column; /* buttonsWrapper内のボタンは縦に並べる */
-    align-items: center;    /* buttonsWrapper内のボタンを水平中央揃えにする */
-    /* flex-grow: 0; */     /* buttonsWrapperは伸縮しない */
-    /* flex-shrink: 0; */   /* buttonsWrapperは縮まない */
-    /* width: auto; */      /* 中のボタンの幅に依存 */
-    box-sizing: border-box;
+    flex-direction: column; /* 子要素 (.canvasWrapper, .inputArea) を縦に並べる */
+    width: 100%;  /* 親(body)の幅いっぱいに */
+    height: 100%; /* 親(body)の高さいっぱいに */
+    padding: 8px; /* コンテナの内側に余白 */
+    /*border: 2px solid blue; /* 範囲確認用 */
+    overflow: hidden; /* コンテナからはみ出す内容は隠す */
 }
 
-/* 既存の .buttonsWrapper button スタイル */
+/* 3. キャンバスラッパー (.canvasWrapper) */
+.canvasWrapper {
+    /* 高さ: canvasのHTML属性 height="128" を基準に、
+       ボーダーや必要な余白を考慮して設定。
+       ここでは仮に 150px とし、canvasが内部に収まるようにする。
+       280px で安定していたなら、それでもOK。ただし、その場合 canvas の height:100% がどう影響するか注意 */
+    height: 150px; /* ★★★ canvasの高さ(128px) + 上下ボーダー/パディング分を考慮した値に調整 ★★★ */
+                   /* または、検証で安定した 280px を使用 */
+    flex-shrink: 0; /* 高さが縮まないようにする */
+    margin-top: 10px;
+    margin-bottom: 8px; /*下の .inputArea との間隔 */
+
+    display: flex;
+    justify-content: center; /* canvas を水平中央に */
+    align-items: flex-start; /* canvas を垂直上端に */
+
+    /*border: 2px solid red; /* 範囲確認用 */
+    /* padding: 0; */ /* canvasのマージンで制御するため、ラッパーのpaddingは0でも良い */
+                      /* もしラッパーにpaddingが必要なら、canvasのサイズ計算に影響 */
+}
+
+/* 4. キャンバス本体 (#previewCanvas) */
+canvas#previewCanvas {
+    /* HTML属性の width="296" height="128" を尊重する */
+    /* CSSで表示サイズを制御する場合は、アスペクト比に注意 */
+    max-width: 100%;  /* 親(.canvasWrapper)の幅を超えないように */
+    /* max-height: 100%; */ /* 親(.canvasWrapper)の高さを超えないようにする場合 */
+                           /* ただし、height:150px (canvasWrapper) に対して canvas height=128 なので、
+                              height:auto や height:128px の方が自然かもしれない */
+    height: 128px; /* HTML属性と合わせるか、auto */
+    width: auto;   /* heightを基準にアスペクト比を保つ */
+
+
+    margin: 0;
+    margin-top: 10px;
+    padding: 0;       /* 念のため */
+    border: 1px solid black; /* 範囲確認用 */
+    display: block;   /* display:block は安定のため良い */
+}
+
+/* 5. 入力エリアコンテナ (.inputArea) */
+.inputArea {
+    flex-grow: 1;
+    min-height: 0;
+    /* max-height: 200px; */ /* 必要に応じて */
+    display: flex;
+    flex-direction: row; /* 子要素を横に並べるのは維持 */
+    justify-content: center; /* 水平方向は中央揃えを維持 */
+    align-items: flex-start; /* ★★★ 子要素のグループを垂直上端に配置 ★★★ */
+    /* border: 2px solid orange;*/
+    padding: 8px;
+    overflow: hidden;
+    background-color: white;
+}
+
+/* 6. テキスト入力エリア (#textInput) */
+#textInput {
+    width: 148px;
+    height: 64px;
+    margin-right: 8px;
+    padding: 5px;
+    border: 1px solid purple;
+    resize: none;
+    overflow-y: auto;
+}
+
+/* 7. ボタンラッパー (.buttonsWrapper) */
+.buttonsWrapper {
+    flex-shrink: 0; /* 幅が縮まないように */
+    width: 60px; /* 固定幅 */
+    display: flex;
+    flex-direction: column;
+    align-items: center; /* ボタンを中央に (任意) */
+    /*border: 1px solid teal; /* 範囲確認用 */
+}
+
 .buttonsWrapper button {
-	padding: 4px 8px;
-	margin: 7px 0; /* ★左右マージンを0に (親のalign-itemsで中央揃え) */
-	font-size: 1.2rem;
-    white-space: nowrap;
-    writing-mode: horizontal-tb;
-    width: auto;
-    min-width: min-content; /* テキスト内容に応じた最小幅 */
-    box-sizing: border-box;
+    width: 100%; /* 親(.buttonsWrapper)の幅いっぱいに */
+    padding: 5px 0;
+    margin-bottom: 5px;
+    font-size: 0.9em;
 }
 
-/* 「消す」ボタン(#clearTextButton) 専用のスタイル */
 button#clearTextButton {
-    font-size: 0.9rem;
-    padding: 2px 6px;
-    margin: 3px 0; /* ★左右マージンを0に */
-    /* width: auto; や white-space などは共通スタイルから継承 */
+    /* 上記のスタイルを継承 */
 }
-
