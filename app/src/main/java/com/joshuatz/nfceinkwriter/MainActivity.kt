@@ -146,12 +146,12 @@ class MainActivity : AppCompatActivity() {
             mReFlashButton.setCardBackgroundColor(Color.DKGRAY)
 
             // APIレベルによる分岐 (getDrawable)
-            val warningDrawable = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            /*val warningDrawable = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                 resources.getDrawable(android.R.drawable.stat_sys_warning, null)
             } else {
                 resources.getDrawable(android.R.drawable.stat_sys_warning)
             }
-            reFlashImagePreview.setImageDrawable(warningDrawable)
+            reFlashImagePreview.setImageDrawable(warningDrawable)*/
         }
     }
 
