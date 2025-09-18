@@ -6,11 +6,12 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.widget.Button
 import android.widget.ImageView
-import android.widget.TextView
+import android.widget.TextView // TextView は現在コメントアウトされている部分でのみ使用
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.cardview.widget.CardView
@@ -99,13 +100,13 @@ class MainActivity : AppCompatActivity() {
         if (requestCode == CropImage.CROP_IMAGE_ACTIVITY_REQUEST_CODE) {
             val result = CropImage.getActivityResult(resultData)
             if (resultCode == Activity.RESULT_OK) {
-                var croppedBitmap = result?.getBitmap(this)
+                val croppedBitmap = result?.getBitmap(this) // `var` から `val` に変更 (再代入がないため)
                 if (croppedBitmap != null) {
                     // Resizing should have already been taken care of by setRequestedSize
                     // Save
                     openFileOutput(GeneratedImageFilename, Context.MODE_PRIVATE).use { fileOutStream ->
-                        croppedBitmap?.compress(Bitmap.CompressFormat.PNG, 100, fileOutStream)
-                        fileOutStream.close()
+                        croppedBitmap.compress(Bitmap.CompressFormat.PNG, 100, fileOutStream) // croppedBitmapが非nullであることをスマートキャストで利用
+                        // fileOutStream.close() // .use ブロックが自動的にクローズします
                         // Navigate to flasher
                         val navIntent = Intent(this, NfcFlasher::class.java)
                         startActivity(navIntent)
@@ -114,7 +115,8 @@ class MainActivity : AppCompatActivity() {
                     Log.e("Crop image callback", "Crop image result not available")
                 }
             } else if (resultCode == CropImage.CROP_IMAGE_ACTIVITY_RESULT_ERROR_CODE) {
-                val error = result!!.error
+                val error = result?.error // resultがnullの場合を考慮して ?. を使用
+                Log.e("Crop image callback", "Crop image error: ${error?.message}", error) // エラーログを少し詳細に
             }
         }
     }
@@ -129,6 +131,7 @@ class MainActivity : AppCompatActivity() {
         findViewById<TextView>(R.id.currentDisplaySize).text = screenSizeStr ?: DefaultScreenSize
     }
     */
+    @Suppress("DEPRECATION") // getDrawable(Int, Theme) の代替が API 21+ のため、minSdkによっては抑制が必要な場合がある
     private fun checkReFlashAbility() {
         val lastGeneratedFile = getFileStreamPath(GeneratedImageFilename)
         val reFlashImagePreview: ImageView = findViewById(R.id.reflashButtonImage)
@@ -138,10 +141,17 @@ class MainActivity : AppCompatActivity() {
             reFlashImagePreview.setImageURI(null)
             reFlashImagePreview.setImageURI(Uri.fromFile((lastGeneratedFile)))
         } else {
+            mHasReFlashableImage = false // 状態を明確に設定
             // Grey out button
             mReFlashButton.setCardBackgroundColor(Color.DKGRAY)
-            val drawableImg = resources.getDrawable(android.R.drawable.stat_sys_warning, null)
-            reFlashImagePreview.setImageDrawable(drawableImg)
+
+            // APIレベルによる分岐 (getDrawable)
+            val warningDrawable = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                resources.getDrawable(android.R.drawable.stat_sys_warning, null)
+            } else {
+                resources.getDrawable(android.R.drawable.stat_sys_warning)
+            }
+            reFlashImagePreview.setImageDrawable(warningDrawable)
         }
     }
 

@@ -50,4 +50,30 @@
     <style name="ProgressBarStyle">
         <item name="colorAccent">@color/white</item>
     </style>
+
+    <!-- ▼▼▼ ここから新しいスタイルを追加 ▼▼▼ -->
+    <style name="CompactButton" parent="Widget.MaterialComponents.Button">
+        <!--
+            親スタイルを Widget.MaterialComponents.Button に変更。
+            TextButton にすると背景や枠線が最小限になりすぎる場合があるので、
+            通常のボタンをベースにコンパクト化します。
+            もし TextButton の見た目がよければ Widget.MaterialComponents.Button.TextButton にしてください。
+        -->
+        <item name="android:minWidth">80dp</item>
+        <item name="android:paddingLeft">12dp</item> <!-- 少し広めのパディングから調整 -->
+        <item name="android:paddingRight">12dp</item>
+        <item name="android:paddingTop">8dp</item>
+        <item name="android:paddingBottom">8dp</item>
+        <item name="iconPadding">0dp</item>
+        <item name="android:insetLeft">6dp</item> <!-- デフォルトのボタンインセットより小さく -->
+        <item name="android:insetRight">6dp</item>
+        <item name="android:insetTop">6dp</item>
+        <item name="android:insetBottom">6dp</item>
+        <!-- 必要に応じてテキストサイズも指定 -->
+        <!-- <item name="android:textSize">14sp</item> -->
+        <!-- <item name="android:textAppearance">?attr/textAppearanceButton</item> -->
+    </style>
+    <!-- ▲▲▲ ここまで新しいスタイルを追加 ▲▲▲ -->
+
 </resources>
+

@@ -6,9 +6,20 @@
     <string name="currDisplaySizeDefaultText">Select a Display Size</string>
     <string name="flashButtonText">これでおｋ</string>
     <string name="image_preview_content_description">プレビュー</string>
-    <string name="hold_phone_to_flash_text">いいんちょ(❄╹‿╹)「う～ん」</string>
+    <string name="hold_phone_to_flash_text">いいんちょ(❄╹‿╹)「まあまあ？」</string>
     <string name="imagePreviewText">どるどるトークを重ねてね</string>
     <string name="pleaseWaitWhileFlashingText">しばらく待とう</string>
     <string name="reflash_cta_text">どるどるトークを始めよう！</string>
     <string name="font_label">フォント:</string>
+    <string-array name="font_display_names">
+        <item>Yosugara</item>
+        <item>JK Maru Gothic M</item>
+        <item>Arial</item> <!-- 例としてArialも追加 -->
+    </string-array>
+
+    <string-array name="font_file_names">
+        <item>yosugara.ttf</item> <!-- assets/fonts/yosugara.ttf を想定 -->
+        <item>jk_maru_gothic_m.ttf</item> <!-- assets/fonts/jk_maru_gothic_m.ttf を想定 -->
+        <item>arial.ttf</item> <!-- assets/fonts/arial.ttf を想定 -->
+    </string-array>
 </resources>

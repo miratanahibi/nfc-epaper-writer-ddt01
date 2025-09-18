@@ -1,11 +1,27 @@
-/* style.css - 修正案 */
+/* style.css - @font-face ルール追加版 */
+
+/* カスタムフォント定義 */
+@font-face {
+  font-family: 'JKMaruGothicM'; /* TextEditor.kt の cssFontFamily と一致 */
+  src: url('../../fonts/JK-Maru-Gothic-M.otf'); /* TextEditor.kt の assetFileName と一致 */
+}
+
+@font-face {
+  font-family: 'KeiFont'; /* TextEditor.kt の cssFontFamily と一致 */
+  src: url('../../fonts/keifont.ttf'); /* TextEditor.kt の assetFileName と一致 */
+}
+
+@font-face {
+  font-family: 'Yosugara'; /* TextEditor.kt の cssFontFamily と一致 */
+  src: url('../../fonts/yosugaraver1_2.ttf'); /* TextEditor.kt の assetFileName と一致 */
+}
 
 /* 1. 基本的なリセットとページ全体のFlex設定 */
 html, body {
     height: 100%; /* ビューポートの高さいっぱいに */
     margin: 0;
     padding: 0;
-    font-family: sans-serif;
+    font-family: 'Arial', sans-serif; /* 初期フォントをArialに設定 (Arialがなければsans-serif) */
     box-sizing: border-box;
     overflow: hidden; /* ページ全体のスクロールを禁止 */
 }
@@ -62,7 +78,6 @@ canvas#previewCanvas {
     height: 128px; /* HTML属性と合わせるか、auto */
     width: auto;   /* heightを基準にアスペクト比を保つ */
 
-
     margin: 0;
     margin-top: 10px;
     padding: 0;       /* 念のため */
@@ -94,6 +109,8 @@ canvas#previewCanvas {
     border: 1px solid purple;
     resize: none;
     overflow-y: auto;
+    /* 初期フォントはbodyから継承されるが、個別に指定も可能 */
+    /* font-family: 'Arial', sans-serif; */
 }
 
 /* 7. ボタンラッパー (.buttonsWrapper) */

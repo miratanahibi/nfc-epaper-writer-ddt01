@@ -10,20 +10,20 @@ import android.util.Base64
 import android.util.Log
 import android.webkit.*
 import android.widget.Button
+import android.widget.ImageView // ImageView をインポート
+import android.widget.Toast
 import androidx.annotation.IdRes
 import androidx.annotation.LayoutRes
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import androidx.webkit.WebViewAssetLoader
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.coroutines.Continuation
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
-import kotlin.coroutines.Continuation // suspendCoroutine で使用
-// import java.util.concurrent.TimeoutException // タイムアウトを実装する場合
-import android.widget.Toast // エラー表示用 (getAndFlashGraphic)
+
 
 class WebAppInterface(
     private val onImageReady: (ByteArray) -> Unit
@@ -45,12 +45,22 @@ class WebAppInterface(
     }
 }
 
-abstract class GraphicEditorBase: AppCompatActivity() {
-    @get:LayoutRes abstract val layoutId: Int
-    @get:IdRes abstract val flashButtonId: Int
-    @get:IdRes abstract val webViewId: Int
+abstract class GraphicEditorBase : AppCompatActivity() {
+    @get:LayoutRes
+    abstract val layoutId: Int
+
+    @get:IdRes
+    abstract val flashButtonId: Int
+
+    @get:IdRes
+    abstract val webViewId: Int
+
+    // ★ 具象クラスでプレビュー用ImageViewのIDを指定させるための抽象プロパティ
+    @get:IdRes
+    abstract val previewImageViewId: Int
+
     abstract val webViewUrl: String
-    protected var mWebView: WebView? = null
+    protected lateinit var mWebView: WebView // lateinit に変更 (onCreateで初期化)
     private var imageContinuation: Continuation<ByteArray>? = null
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -58,8 +68,7 @@ abstract class GraphicEditorBase: AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(this.layoutId)
 
-        val webView: WebView = findViewById(this.webViewId)
-        this.mWebView = webView
+        mWebView = findViewById(this.webViewId) // mWebView の初期化
 
         // Setup asset loader to handle local asset paths
         val assetLoader = WebViewAssetLoader.Builder()
@@ -67,8 +76,7 @@ abstract class GraphicEditorBase: AppCompatActivity() {
             .build()
 
         // Override WebView client
-        webView.webViewClient = object : WebViewClient() {
-            // If request is for local file, intercept and serve
+        mWebView.webViewClient = object : WebViewClient() {
             override fun shouldInterceptRequest(
                 view: WebView,
                 request: WebResourceRequest
@@ -81,30 +89,26 @@ abstract class GraphicEditorBase: AppCompatActivity() {
                 onWebViewPageStarted()
             }
 
-            // Listen for page load finished, before evaluating JS
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
-                onWebViewPageFinished()
+                onWebViewPageFinished() // これが呼ばれた後に初期プレビュー更新を行う
             }
         }
 
         // WebView - Enable JS
-        webView.settings.javaScriptEnabled = true
+        mWebView.settings.javaScriptEnabled = true
+        WebView.setWebContentsDebuggingEnabled(true) // デバッグ用に有効化
 
-        // --- JavaScript Interface の登録 ---
-        webView.addJavascriptInterface(
-            WebAppInterface { imageBytes -> // WebAppInterface をインスタンス化
+        mWebView.addJavascriptInterface(
+            WebAppInterface { imageBytes ->
                 imageContinuation?.resume(imageBytes)
                 imageContinuation = null
             },
-            "AndroidInterface" // JavaScript側で呼び出す名前
+            "AndroidInterface"
         )
 
-        // WebView - set Chrome client
-        webView.webChromeClient = WebChromeClient()
-
-
-        webView.loadUrl(this.webViewUrl)
+        mWebView.webChromeClient = WebChromeClient()
+        mWebView.loadUrl(this.webViewUrl)
 
         val flashButton: Button = findViewById(this.flashButtonId)
         flashButton.setOnClickListener {
@@ -116,18 +120,12 @@ abstract class GraphicEditorBase: AppCompatActivity() {
 
     private suspend fun getAndFlashGraphic() {
         val mContext = this
-        val imageBytes = this.getBitmapFromWebView(this.mWebView!!)
+        val imageBytes = this.getBitmapFromWebView(this.mWebView) // mWebView を使用
 
-        if (imageBytes.isNotEmpty()) { // <<< 追加: imageBytesが空でないかチェック
-            // Decode binary to bitmap (この行は実際にbitmapオブジェクトが必要なければ不要)
-            // @Suppress("UNUSED_VARIABLE")
-            // val bitmap: Bitmap = BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
-
-            // Save bitmap to file
+        if (imageBytes.isNotEmpty()) {
             withContext(Dispatchers.IO) {
                 openFileOutput(GeneratedImageFilename, Context.MODE_PRIVATE).use { fileOutStream ->
                     fileOutStream.write(imageBytes)
-                    // fileOutStream.close() // .use が自動でクローズします
                 }
                 val navIntent = Intent(mContext, NfcFlasher::class.java)
                 val bundle = Bundle()
@@ -135,55 +133,68 @@ abstract class GraphicEditorBase: AppCompatActivity() {
                 navIntent.putExtras(bundle)
                 startActivity(navIntent)
             }
-        } else { // <<< 追加: imageBytesが空だった場合の処理
-            withContext(Dispatchers.Main) { // UIスレッドでToastを表示
+        } else {
+            withContext(Dispatchers.Main) {
                 Toast.makeText(mContext, "Failed to get image from editor", Toast.LENGTH_SHORT).show()
             }
             Log.e("GraphicEditorBase", "getAndFlashGraphic: imageBytes is empty.")
         }
     }
 
-    /*
-    private suspend fun getAndFlashGraphic() {
-        val mContext = this
-        val imageBytes = this.getBitmapFromWebView(this.mWebView!!)
-        // Decode binary to bitmap
-        @Suppress("UNUSED_VARIABLE")
-        val bitmap: Bitmap = BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
-        // Save bitmap to file
-        withContext(Dispatchers.IO) {
-            openFileOutput(GeneratedImageFilename, Context.MODE_PRIVATE).use { fileOutStream ->
-                fileOutStream.write(imageBytes)
-                fileOutStream.close()
-                val navIntent = Intent(mContext, NfcFlasher::class.java)
-                val bundle = Bundle()
-                bundle.putString(IntentKeys.GeneratedImgPath, GeneratedImageFilename)
-                navIntent.putExtras(bundle)
-                startActivity(navIntent)
-            }
-        }
-    }*/
-
     protected fun updateCanvasSize() {
         val preferences = Preferences(this)
         val pixelSize = ScreenSizesInPixels[preferences.getScreenSize()]
-        // Pass display size to WebView
-        this.mWebView?.evaluateJavascript("setDisplaySize(${pixelSize!!.first}, ${pixelSize.second});", null)
+        mWebView.evaluateJavascript("setDisplaySize(${pixelSize!!.first}, ${pixelSize.second});", null)
     }
 
-    // Put any JS eval calls here that need the page loaded first
+    // ★ プレビュー更新用メソッド ★
+    protected fun refreshWebViewPreviewBitmap() {
+        if (!::mWebView.isInitialized) {
+            Log.w("GraphicEditorBase", "WebView not initialized, cannot refresh preview.")
+            return
+        }
+        Log.d("GraphicEditorBase", "refreshWebViewPreviewBitmap called.")
+        lifecycleScope.launch {
+            try {
+                val imageBytes = getBitmapFromWebView(mWebView)
+                if (imageBytes.isNotEmpty()) {
+                    val bitmap = BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
+                    val previewImageView = findViewById<ImageView>(previewImageViewId)
+                    previewImageView?.setImageBitmap(bitmap)
+                    Log.d("GraphicEditorBase", "Preview ImageView updated successfully.")
+                } else {
+                    Log.w("GraphicEditorBase", "refreshWebViewPreviewBitmap: Got empty imageBytes.")
+                }
+            } catch (e: Exception) {
+                Log.e("GraphicEditorBase", "Error refreshing preview bitmap", e)
+            }
+        }
+    }
+
+    // ★★★ mWebView を安全に取得するためのヘルパーメソッドを追加 ★★★
+    protected fun getWebViewInstance(): WebView? {
+        if (::mWebView.isInitialized) {
+            return mWebView
+        }
+        Log.w("GraphicEditorBase", "getWebViewInstance: mWebView is not initialized.")
+        return null
+    }
+    // ★★★ 追加ここまで ★★★
+
     open fun onWebViewPageFinished() {
-        // Available to subclass
+        // ページロード完了後に初期プレビューを更新
+        Log.d("GraphicEditorBase", "onWebViewPageFinished: Page loaded, refreshing initial preview.")
+        refreshWebViewPreviewBitmap()
     }
 
     open fun onWebViewPageStarted() {
         // Available to subclass
     }
 
-    open suspend fun getBitmapFromWebView(webView: WebView): ByteArray {
+    // getBitmapFromWebView は mWebView を引数に取るように変更、またはメンバ変数 mWebView を直接使用
+    open suspend fun getBitmapFromWebView(webView: WebView): ByteArray { // 引数 webView は維持
         return suspendCoroutine { continuation ->
             imageContinuation = continuation
-
             val script = """
                 if (typeof getImgSerializedFromCanvas === 'function') {
                     getImgSerializedFromCanvas(undefined, undefined, function(base64) {
@@ -191,51 +202,19 @@ abstract class GraphicEditorBase: AppCompatActivity() {
                             window.AndroidInterface.processImageData(base64);
                         } else {
                             console.error('AndroidInterface.processImageData is not available.');
-                            // AndroidInterface が見つからず、画像データを渡せない場合
-                            // nullを渡してエラーとして処理させる
-                            if (window.AndroidInterface && typeof window.AndroidInterface.processImageData === 'function') {
+                            if (window.AndroidInterface && typeof window.AndroidInterface.processImageData === 'function') { // エラーの場合もnullを通知
                                 window.AndroidInterface.processImageData(null);
                             }
                         }
                     });
                 } else {
                     console.error('getImgSerializedFromCanvas is not defined.');
-                    // getImgSerializedFromCanvas が見つからない場合
-                    if (window.AndroidInterface && typeof window.AndroidInterface.processImageData === 'function') {
+                     if (window.AndroidInterface && typeof window.AndroidInterface.processImageData === 'function') { // エラーの場合もnullを通知
                         window.AndroidInterface.processImageData(null);
                     }
                 }
             """.trimIndent()
-            webView.evaluateJavascript(script, null)
-
-            // --- オプション: タイムアウト処理の例 ---
-            // lifecycleScope.launch {
-            //     delay(5000L) // 5秒のタイムアウト
-            //     if (imageContinuation == continuation) { // imageContinuationがクリアされていなければタイムアウトと判断
-            //         Log.w("GraphicEditorBase", "getBitmapFromWebView timed out")
-            //         imageContinuation?.resumeWithException(TimeoutException("Image retrieval timed out"))
-            //         imageContinuation = null
-            //     }
-            // }
-            // --- タイムアウト処理ここまで ---
+            webView.evaluateJavascript(script, null) // 引数のwebViewを使用
         }
     }
-
-    /*
-    open suspend fun getBitmapFromWebView(webView: WebView): ByteArray {
-        // Dump bitmap data from Canvas
-        // Cheating by using delay + global. @TODO - rewrite to addJavascriptInterface (careful)
-        webView.evaluateJavascript(
-            "getImgSerializedFromCanvas(undefined, undefined, (output) => window.imgStr = output);",
-            null
-        )
-        delay(1000L)
-
-        return suspendCoroutine<ByteArray> { continuation ->
-            webView.evaluateJavascript("window.imgStr;") { bitmapStr ->
-                val imageBytes = Base64.decode(bitmapStr, Base64.DEFAULT)
-                continuation.resume(imageBytes)
-            }
-        }
-    }*/
 }

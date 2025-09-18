@@ -6,7 +6,7 @@ import android.content.IntentFilter
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Color
-import android.graphics.Matrix // Matrixは現状未使用のようですが、残しておきます
+import android.graphics.Matrix
 import android.widget.Switch
 import android.net.Uri
 import android.nfc.NfcAdapter
@@ -20,12 +20,13 @@ import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
 import android.view.View
+import android.widget.Button // 追加
 import android.widget.ImageView
 import android.widget.ProgressBar
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.constraintlayout.widget.ConstraintLayout
-import androidx.core.text.color
+// import androidx.core.text.color // 未使用の可能性
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -39,12 +40,19 @@ import waveshare.feng.nfctag.activity.WaveShareHandler
 import java.io.IOException
 import java.nio.charset.StandardCharsets
 import kotlin.math.roundToInt
-import kotlin.text.toFloat
+// import kotlin.text.toFloat // 未使用の可能性
+import android.content.Context
+import android.graphics.drawable.BitmapDrawable
+import androidx.core.text.color
+import java.io.File
+import java.io.FileOutputStream
 
 // 定数など
-private const val TAG_NFL = "NfcFlasher" // クラス名と区別するため変更
+private const val TAG_NFL = "NfcFlasher" // こちらを使用
+// private const val TAG = "NfcFlasher" // 削除 (TAG_NFLと重複)
 
 class NfcFlasher : AppCompatActivity() {
+
     private var mIsFlashing = false
         set(value) {
             field = value
@@ -72,9 +80,6 @@ class NfcFlasher : AppCompatActivity() {
     private var mImgFileUri: Uri? = null
 
     // --- Filter State ---
-// private lateinit var switchHalftoneFilter: Switch // 以前のものはコメントアウトまたは削除
-// private var isHalftoneFilterEnabled: Boolean = false // 以前のものはコメントアウトまたは削除
-
     private lateinit var switchDitheringFilter: Switch
     private var isDitheringFilterEnabled: Boolean = false
 
@@ -97,22 +102,12 @@ class NfcFlasher : AppCompatActivity() {
         }
     }
 
-    override fun onSaveInstanceState(outState: Bundle) {
-        super.onSaveInstanceState(outState)
-        mImgFileUri?.toString()?.let {
-            outState.putString("serializedGeneratedImgUri", it)
-        }
-        outState.putBoolean("isDitheringFilterEnabled", isDitheringFilterEnabled)
-        outState.putBoolean("isDotPatternFilterEnabled", isDotPatternFilterEnabled)
-    }
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_nfc_flasher)
 
         // UI要素の取得
-        val imagePreviewElem: ImageView = findViewById(R.id.previewImageView)
-        // ★ 既存のスイッチIDを変更し、新しいスイッチの参照を追加
+        // val imagePreviewElem: ImageView = findViewById(R.id.previewImageView) // コメントアウト済み
         switchDitheringFilter = findViewById(R.id.switchDitheringFilter)
         switchDotPatternFilter = findViewById(R.id.switchDotPatternFilter)
         mWhileFlashingArea = findViewById(R.id.whileFlashingArea)
@@ -126,7 +121,7 @@ class NfcFlasher : AppCompatActivity() {
         switchDitheringFilter.isChecked = isDitheringFilterEnabled
         switchDotPatternFilter.isChecked = isDotPatternFilterEnabled
 
-        // Bitmapのロード (既存のロジックはそのまま)
+        // Bitmapのロード
         val savedUriStr = savedInstanceState?.getString("serializedGeneratedImgUri")
         if (savedUriStr != null) {
             mImgFileUri = Uri.parse(savedUriStr)
@@ -150,31 +145,30 @@ class NfcFlasher : AppCompatActivity() {
                     } else {
                         Log.e(TAG_NFL, "Failed to decode bitmap from URI: $uri")
                         Toast.makeText(this, "画像のデコードに失敗しました。", Toast.LENGTH_LONG).show()
-                        finish(); return
+                        finish(); return // 修正
                     }
                 }
             } catch (e: IOException) {
                 Log.e(TAG_NFL, "Error loading bitmap from URI: $uri", e)
                 Toast.makeText(this, "画像の読み込みに失敗しました。", Toast.LENGTH_LONG).show()
-                finish(); return
+                finish(); return // 修正
             } catch (e: OutOfMemoryError) {
                 Log.e(TAG_NFL, "OutOfMemoryError loading bitmap: $uri", e)
                 Toast.makeText(this, "画像のメモリ不足エラー。", Toast.LENGTH_LONG).show()
-                finish(); return
+                finish(); return // 修正
             }
         } ?: run {
             Log.e(TAG_NFL, "Image URI is null. Cannot load image.")
             Toast.makeText(this, "画像ファイルが見つかりません。", Toast.LENGTH_LONG).show()
-            finish(); return
+            finish(); return // 修正
         }
 
         mIsFlashing = false
 
-        // ★ スイッチのリスナー設定 (2つのスイッチに対応)
+        // スイッチのリスナー設定
         switchDitheringFilter.setOnCheckedChangeListener { _, isChecked ->
             isDitheringFilterEnabled = isChecked
             if (isChecked && isDotPatternFilterEnabled) {
-                // ディザリングがONになったら、ドットパターンはOFFにする
                 isDotPatternFilterEnabled = false
                 switchDotPatternFilter.isChecked = false
             }
@@ -185,7 +179,6 @@ class NfcFlasher : AppCompatActivity() {
         switchDotPatternFilter.setOnCheckedChangeListener { _, isChecked ->
             isDotPatternFilterEnabled = isChecked
             if (isChecked && isDitheringFilterEnabled) {
-                // ドットパターンがONになったら、ディザリングはOFFにする
                 isDitheringFilterEnabled = false
                 switchDitheringFilter.isChecked = false
             }
@@ -193,7 +186,62 @@ class NfcFlasher : AppCompatActivity() {
             updatePreviewAndPrepareBitmap()
         }
 
-        // NFC関連の初期化 (既存のロジックはそのまま)
+        // ▼▼▼ ここからボタン機能の追加 ▼▼▼
+        val buttonEffect1: Button = findViewById(R.id.buttonEffect1)
+        val buttonEffect2: Button = findViewById(R.id.buttonEffect2)
+        val buttonEffect3: Button = findViewById(R.id.buttonEffect3)
+        val buttonEffect4: Button = findViewById(R.id.buttonEffect4)
+        val previewImageView: ImageView = findViewById(R.id.previewImageView)
+
+        val imageFileNames = listOf(
+            "slot1_image.png",
+            "slot2_image.png",
+            "slot3_image.png",
+            "slot4_image.png"
+        )
+
+        val buttonToFileMap = mapOf(
+            R.id.buttonEffect1 to imageFileNames[0],
+            R.id.buttonEffect2 to imageFileNames[1],
+            R.id.buttonEffect3 to imageFileNames[2],
+            R.id.buttonEffect4 to imageFileNames[3]
+        )
+
+        buttonToFileMap.forEach { (buttonId, fileName) ->
+            val button: Button = findViewById(buttonId)
+
+            button.setOnLongClickListener {
+                val bitmapToSave = mPreparedBitmapForEpd ?: getBitmapFromImageView(previewImageView)
+
+                if (bitmapToSave != null) {
+                    val success = saveBitmapToInternalStorage(this, bitmapToSave, fileName)
+                    if (success) {
+                        Toast.makeText(this, "${button.text} の画像を保存しました", Toast.LENGTH_SHORT).show()
+                    } else {
+                        Toast.makeText(this, "画像の保存に失敗しました", Toast.LENGTH_SHORT).show()
+                    }
+                } else {
+                    Toast.makeText(this, "保存する画像がありません", Toast.LENGTH_SHORT).show()
+                }
+                true
+            }
+
+            button.setOnClickListener {
+                val loadedBitmap = loadBitmapFromInternalStorage(this, fileName)
+                if (loadedBitmap != null) {
+                    this.mOriginalBitmap = loadedBitmap
+                    updatePreviewAndPrepareBitmap()
+                    Toast.makeText(this, "${button.text} の画像を表示し、準備しました", Toast.LENGTH_SHORT).show()
+                    Log.d(TAG_NFL, "Loaded bitmap for ${button.text}, set as mOriginalBitmap, and updated preview.")
+                } else {
+                    Toast.makeText(this, "${button.text} に保存された画像はありません", Toast.LENGTH_SHORT).show()
+                    Log.d(TAG_NFL, "No saved bitmap found for ${button.text}.")
+                }
+            }
+        }
+        // ▲▲▲ ここまでボタン機能の追加 ▲▲▲
+
+        // NFC関連の初期化
         val nfcIntent = Intent(this, javaClass).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
         val piFlags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
@@ -215,10 +263,19 @@ class NfcFlasher : AppCompatActivity() {
         if (mNfcAdapter == null) {
             Toast.makeText(this, "このスマホではNFC機能が利用できません。", Toast.LENGTH_LONG).show()
             finish()
-            return
+            return // 修正
         }
     }
 
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        mImgFileUri?.toString()?.let {
+            outState.putString("serializedGeneratedImgUri", it)
+        }
+        outState.putBoolean("isDitheringFilterEnabled", isDitheringFilterEnabled)
+        outState.putBoolean("isDotPatternFilterEnabled", isDotPatternFilterEnabled)
+    }
 
     private fun updatePreviewAndPrepareBitmap() {
         if (mOriginalBitmap == null) {
@@ -230,15 +287,15 @@ class NfcFlasher : AppCompatActivity() {
 
         val bitmapToProcess = mOriginalBitmap!!
 
-        if (isDitheringFilterEnabled) { // ★ ディザリングフィルタが優先 (またはUIで制御)
+        if (isDitheringFilterEnabled) {
             Log.d(TAG_NFL, "Applying Floyd-Steinberg dithering filter...")
-            val filteredBitmap = applyHalftoneDitheringFilter(bitmapToProcess) // Floyd-Steinberg関数
+            val filteredBitmap = applyHalftoneDitheringFilter(bitmapToProcess)
             mPreparedBitmapForEpd = ensureEpdPhysicalSizeAndMonochrome(filteredBitmap)
-        } else if (isDotPatternFilterEnabled) { // ★ 次にドットパターンフィルタ
+        } else if (isDotPatternFilterEnabled) {
             Log.d(TAG_NFL, "Applying halftone dot pattern filter...")
-            val filteredBitmap = applyHalftoneDotPatternFilter(bitmapToProcess, cellSize = 2, dotLevels = 8) // ドットパターン関数
+            val filteredBitmap = applyHalftoneDotPatternFilter(bitmapToProcess, cellSize = 2, dotLevels = 8)
             mPreparedBitmapForEpd = ensureEpdPhysicalSizeAndMonochrome(filteredBitmap)
-        } else { // どちらのフィルタもOFF
+        } else {
             Log.d(TAG_NFL, "No filter. Preparing bitmap for EPD.")
             mPreparedBitmapForEpd = prepareBitmapForEpd(bitmapToProcess)
         }
@@ -266,7 +323,7 @@ class NfcFlasher : AppCompatActivity() {
             }
         }
 
-        val divisor = 48.0f // 誤差の分配係数の合計
+        val divisor = 48.0f
 
         for (y in 0 until height) {
             for (x in 0 until width) {
@@ -279,12 +336,9 @@ class NfcFlasher : AppCompatActivity() {
 
                 val quantError = oldPixelGray - newPixelGray
 
-                // 誤差を分配 (Jarvis, Judice, and Ninke)
-                // 行 y
                 if (x + 1 < width) grayPixels[currentIndex + 1] += quantError * 7.0f / divisor
                 if (x + 2 < width) grayPixels[currentIndex + 2] += quantError * 5.0f / divisor
 
-                // 行 y + 1
                 if (y + 1 < height) {
                     if (x - 2 >= 0) grayPixels[(y + 1) * width + (x - 2)] += quantError * 3.0f / divisor
                     if (x - 1 >= 0) grayPixels[(y + 1) * width + (x - 1)] += quantError * 5.0f / divisor
@@ -293,7 +347,6 @@ class NfcFlasher : AppCompatActivity() {
                     if (x + 2 < width) grayPixels[(y + 1) * width + (x + 2)] += quantError * 3.0f / divisor
                 }
 
-                // 行 y + 2
                 if (y + 2 < height) {
                     if (x - 2 >= 0) grayPixels[(y + 2) * width + (x - 2)] += quantError * 1.0f / divisor
                     if (x - 1 >= 0) grayPixels[(y + 2) * width + (x - 1)] += quantError * 3.0f / divisor
@@ -313,15 +366,13 @@ class NfcFlasher : AppCompatActivity() {
         val width = originalBitmap.width
         val height = originalBitmap.height
 
-        // 出力用Bitmap (白で初期化)
         val halftoneBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-        halftoneBitmap.eraseColor(Color.WHITE) // 背景を白にする
+        halftoneBitmap.eraseColor(Color.WHITE)
         val canvas = android.graphics.Canvas(halftoneBitmap)
         val paint = android.graphics.Paint()
         paint.color = Color.BLACK
         paint.style = android.graphics.Paint.Style.FILL
 
-        // グレースケールピクセルデータを取得
         val grayPixels = FloatArray(width * height)
         for (y in 0 until height) {
             for (x in 0 until width) {
@@ -333,13 +384,11 @@ class NfcFlasher : AppCompatActivity() {
             }
         }
 
-        // セルごとに処理
         for (cellY in 0 until height step cellSize) {
             for (cellX in 0 until width step cellSize) {
                 var sumGray = 0f
                 var count = 0
 
-                // セル内の平均グレースケール値を計算
                 for (y in cellY until (cellY + cellSize).coerceAtMost(height)) {
                     for (x in cellX until (cellX + cellSize).coerceAtMost(width)) {
                         sumGray += grayPixels[y * width + x]
@@ -347,54 +396,34 @@ class NfcFlasher : AppCompatActivity() {
                     }
                 }
                 if (count == 0) continue
-                val avgGrayInCell = sumGray / count // 平均グレースケール (0-255, 0が黒, 255が白)
+                val avgGrayInCell = sumGray / count
 
-                // 平均グレースケール値からドットの大きさを決定
-                // avgGrayInCell が低い (黒に近い) ほど、dotScale は 1.0 に近くなる
-                // avgGrayInCell が高い (白に近い) ほど、dotScale は 0.0 に近くなる
-                val normalizedIntensity = avgGrayInCell / 255f // 0.0 (黒) - 1.0 (白)
-
-                // ドットレベルに基づいてドットの相対サイズを決定
-                // (1.0 - normalizedIntensity) が 0 (白) から 1 (黒) の範囲になる
+                val normalizedIntensity = avgGrayInCell / 255f
                 val blackness = 1.0f - normalizedIntensity
-                var dotSizeFactor = 0f // 0.0 (ドットなし) to 1.0 (セル全体を黒)
+                var dotSizeFactor = 0f
 
                 if (dotLevels > 1) {
-                    // dotLevels段階でドットサイズを量子化
-                    // 例: 5段階なら、blackness が 0-0.2 で factor 0, 0.2-0.4で factor 0.25, ... , 0.8-1.0 で factor 1.0
                     val levelIndex = (blackness * (dotLevels -1)).coerceIn(0f, (dotLevels -1).toFloat()).roundToInt()
                     dotSizeFactor = levelIndex.toFloat() / (dotLevels -1).toFloat()
-                } else if (dotLevels == 1) { // 1段階なら単純な閾値
+                } else if (dotLevels == 1) {
                     dotSizeFactor = if (blackness >= 0.5f) 1.0f else 0.0f
                 }
 
-
                 if (dotSizeFactor > 0) {
-                    // ドットサイズ (セルの何割を占めるか)
-                    // 簡単のため、ドットをセルの中心に配置される正方形として描画
-                    // dotSizeFactor が 1.0 のとき、セル全体を塗りつぶす
-                    // dotSizeFactor が 0.5 のとき、セルの半分の面積 (一辺は sqrt(0.5) * cellSize)
-
-                    // ここでは、dotSizeFactor を「一辺の長さの比率」として単純化して扱う
-                    val dotSideLength = cellSize * dotSizeFactor // ドットの一辺の長さ
-
-                    // 描画する正方形ドットの中心からのオフセット
+                    val dotSideLength = cellSize * dotSizeFactor
                     val offset = (cellSize - dotSideLength) / 2f
-
                     val rectLeft = cellX + offset
                     val rectTop = cellY + offset
                     val rectRight = cellX + offset + dotSideLength
                     val rectBottom = cellY + offset + dotSideLength
-
-                    if (rectLeft < rectRight && rectTop < rectBottom) { // 有効な矩形か確認
+                    if (rectLeft < rectRight && rectTop < rectBottom) {
                         canvas.drawRect(rectLeft, rectTop, rectRight, rectBottom, paint)
                     }
                 }
             }
         }
-
         Log.d(TAG_NFL, "Halftone dot pattern filter applied.")
-        return halftoneBitmap // ハーフトーンドットパターンが適用されたBitmap
+        return halftoneBitmap
     }
 
     private fun ensureEpdPhysicalSizeAndMonochrome(inputBitmap: Bitmap): Bitmap {
@@ -447,7 +476,7 @@ class NfcFlasher : AppCompatActivity() {
             val r = Color.red(p)
             val g = Color.green(p)
             val b = Color.blue(p)
-            val gray = (r * 0.299 + g * 0.587 + b * 0.114).toInt() // 加重平均に変更
+            val gray = (r * 0.299 + g * 0.587 + b * 0.114).toInt()
             pixels[i] = if (gray > 128) Color.WHITE else Color.BLACK
         }
         val monochromeBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
@@ -575,7 +604,7 @@ class NfcFlasher : AppCompatActivity() {
                     Pair(byteArrayOf(0x74, 0x99.toByte(), 0x00, 0x0D.toByte(), 0x01, 0x20), null)
                 )
                 var currentProgress = 0
-                val totalInitSteps = initCommands.size * 2 // Assuming each pair involves up to 2 transceive operations for progress
+                val totalInitSteps = initCommands.size * 2
                 fun updateInitProgress() {
                     currentProgress++
                     val progressPercentage = (currentProgress * 100 / totalInitSteps).coerceIn(0,15)
@@ -869,6 +898,40 @@ class NfcFlasher : AppCompatActivity() {
         if (mNfcAdapter?.isEnabled == false) {
             Log.w(TAG_NFL, "NFC is currently disabled by user.")
         }
+    }
+
+    private fun saveBitmapToInternalStorage(context: Context, bitmap: Bitmap, fileName: String): Boolean {
+        val file = File(context.filesDir, fileName)
+        var success = false
+        try {
+            FileOutputStream(file).use { fos ->
+                bitmap.compress(Bitmap.CompressFormat.PNG, 100, fos)
+                success = true
+                Log.d(TAG_NFL, "Bitmap saved to: ${file.absolutePath}")
+            }
+        } catch (e: IOException) {
+            Log.e(TAG_NFL, "Error saving bitmap to $fileName", e)
+        }
+        return success
+    }
+
+    private fun loadBitmapFromInternalStorage(context: Context, fileName: String): Bitmap? {
+        val file = File(context.filesDir, fileName)
+        return if (file.exists()) {
+            try {
+                BitmapFactory.decodeFile(file.absolutePath)
+            } catch (e: Exception) {
+                Log.e(TAG_NFL, "Error loading bitmap from $fileName", e)
+                null
+            }
+        } else {
+            Log.d(TAG_NFL, "Bitmap file not found: $fileName")
+            null
+        }
+    }
+
+    private fun getBitmapFromImageView(imageView: ImageView): Bitmap? {
+        return (imageView.drawable as? BitmapDrawable)?.bitmap
     }
 }
 
